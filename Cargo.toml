@@ -1,0 +1,9 @@
+[package]
+name = "b15f"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serialport = "4.3.0"
+thiserror = "1.0.61"
+tracing = { version = "0.1.40", features = ["log"] }
