@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "addLabels": [
+    "renovate",
+    "dependencies"
+  ],
+  "rebaseWhen": "behind-base-branch",
+  "enabled": true,
+  "automerge": true,
+  "platformAutomerge": true,
+  "automergeType": "pr",
+  "automergeStrategy": "rebase",
+  "commitMessagePrefix": "⬆\uFE0F "
+}
