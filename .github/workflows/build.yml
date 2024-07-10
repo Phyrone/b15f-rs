@@ -1,6 +1,6 @@
 name: Rust
 on:
-  push: {}
+  push: { }
 
 env:
   CARGO_TERM_COLOR: always
@@ -11,8 +11,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v4
+        name: Checkout
+      - name: Setup Libudev
+        run: sudo apt-get install -y libudev-dev
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        name: Cache dependencies
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
