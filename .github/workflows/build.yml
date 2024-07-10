@@ -16,7 +16,7 @@ jobs:
       - name: Setup Libudev
         run: sudo apt-get install -y libudev-dev
       - name: Set up Rust
-        uses: actions-rs/toolchain@v1.0.6
+        uses: actions-rs/toolchain@v1.0.7
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
