@@ -7,3 +7,4 @@ edition = "2021"
 serialport = "4.3.0"
 thiserror = "1.0.61"
 tracing = { version = "0.1.40", features = ["log"] }
+rand = "0.9.0-alpha.1"

@@ -1,7 +1,11 @@
+use std::time::Duration;
+
+use rand::{random, Rng};
+use serialport::TTYPort;
 use thiserror::Error;
 
 //Serial port settings
-const BAUDRATE: u32 = 57600;
+const BAUD: u32 = 57600;
 
 const MSG_OK: u8 = 0xFF;
 const MSG_ERROR: u8 = 0xFE;
@@ -34,13 +38,23 @@ const RQ_SERVO_ENABLE: u8 = 21;
 const RQ_SERVO_DISABLE: u8 = 22;
 const RQ_SERVO_SET_POS: u8 = 23;
 
-
-#[derive(Debug, )]
-#[repr(u8)]
-pub enum AnalogPort{
-    Analog0 = 0,
-    Analog1 = 1,
+#[derive(Debug, Copy, Clone)]
+enum AnalogWritePort {
+    Port0,
+    Port1,
 }
+#[derive(Debug, Copy, Clone)]
+enum DigitalWritePort {
+    Port0,
+    Port1,
+}
+
+#[derive(Debug, Copy, Clone)]
+enum DigitalReadPort {
+    Port0,
+    Port1,
+}
+
 
 #[derive(Debug, Error)]
 pub enum B15FCommandError {
@@ -50,17 +64,70 @@ pub enum B15FCommandError {
     SerialPortError(#[from] serialport::Error),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+
 }
 
-pub struct B15F<P> where P: serialport::SerialPort {
+#[derive(Debug, Error)]
+pub enum B15FInitError {
+    #[error("command error: {0}")]
+    CommandError(#[from] B15FCommandError),
+    #[error("device not found")]
+    DeviceNotFound,
+    #[error("device not supported")]
+    DeviceNotSupported,
+    #[error("Serial port error: {0}")]
+    SerialPortError(#[from] serialport::Error),
+}
+
+pub struct B15F<P>
+where
+    P: serialport::SerialPort,
+{
     port: P,
 }
 
-impl<P> B15F<P> where P: serialport::SerialPort {
-    pub fn new(port: P) -> B15F<P> {
-        B15F {
+impl B15F<TTYPort> {
+    pub fn open_port(port_name: &str) -> Result<B15F<TTYPort>, B15FInitError> {
+        let port = serialport::new(port_name, BAUD)
+            .timeout(Duration::from_millis(2000))
+            .open_native()
+            .map_err(B15FInitError::SerialPortError)?;
+        B15F::from(port)
+    }
+}
+
+impl<P> B15F<P>
+where
+    P: serialport::SerialPort,
+{
+    pub fn from(port: P) -> Result<B15F<P>, B15FInitError> {
+        let mut board = B15F {
             port
+        };
+        let pass = board.test()?;
+        if !pass {
+            return Err(B15FInitError::DeviceNotSupported);
         }
+        Ok(board)
+    }
+
+
+    fn test(&mut self) -> Result<bool, B15FCommandError> {
+        let rand = random::<u8>();
+
+        let data = [RQ_TEST, rand];
+        self.port.write_all(&data)
+            .map_err(B15FCommandError::IoError)?;
+        let mut response = [0u8; 2];
+        self.port.read_exact(&mut response)
+            .map_err(B15FCommandError::IoError)?;
+        if response[0] != MSG_OK {
+            return Err(B15FCommandError::B15FError);
+        }
+        let response = response[1];
+
+        let pass = (response == rand);
+        Ok(pass)
     }
 
     /// Writes a digital value to a specified port.
@@ -88,11 +155,10 @@ impl<P> B15F<P> where P: serialport::SerialPort {
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
     /// * If the response from the port is not MSG_OK, the function will return a B15FCommandError::B15FError.
-    pub fn digital_write(&mut self, port: u8, value: u8) -> Result<(), B15FCommandError> {
+    pub fn digital_write(&mut self, port: DigitalWritePort, value: u8) -> Result<(), B15FCommandError> {
         let request = match port {
-            0 => RQ_DIGITAL_WRITE_0,
-            1 => RQ_DIGITAL_WRITE_1,
-            _ => panic!("digital write port must be 0 or 1")
+            DigitalWritePort::Port0 => RQ_DIGITAL_WRITE_0,
+            DigitalWritePort::Port1 => RQ_DIGITAL_WRITE_1,
         };
         let data = [request, value];
         self.port.write_all(&data)
@@ -134,10 +200,10 @@ impl<P> B15F<P> where P: serialport::SerialPort {
     /// # Errors
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
-    pub fn digital_read(&mut self, port: u8) -> Result<u8, B15FCommandError> {
+    pub fn digital_read(&mut self, port: DigitalReadPort) -> Result<u8, B15FCommandError> {
         let request = match port {
-            0 => RQ_DIGITAL_READ_0,
-            1 => RQ_DIGITAL_READ_1,
+            DigitalReadPort::Port0 => RQ_DIGITAL_READ_0,
+            DigitalReadPort::Port1 => RQ_DIGITAL_READ_1,
             _ => panic!("digital read port must be 0 or 1")
         };
         let data = [request];
@@ -179,10 +245,10 @@ impl<P> B15F<P> where P: serialport::SerialPort {
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
     /// * If the response from the port is not MSG_OK, the function will return a B15FCommandError::B15FError.
-    pub fn analog_write(&mut self, port: AnalogPort, value: u16) -> Result<(), B15FCommandError> {
+    pub fn analog_write(&mut self, port: AnalogWritePort, value: u16) -> Result<(), B15FCommandError> {
         let request = match port {
-            AnalogPort::Analog0 => RQ_ANALOG_WRITE_0,
-            AnalogPort::Analog1 => RQ_ANALOG_WRITE_1,
+            AnalogWritePort::Port0 => RQ_ANALOG_WRITE_0,
+            AnalogWritePort::Port1 => RQ_ANALOG_WRITE_1,
         };
         if value > 1023 {
             panic!("analog write value must be between 0 and 1023")
@@ -244,6 +310,51 @@ impl<P> B15F<P> where P: serialport::SerialPort {
         Ok(response)
     }
 
+    pub fn set_pwm_frequency(&mut self, frequency: f32) -> Result<u8, B15FCommandError> {
+        let data = frequency.to_le_bytes();
+        let data = [RQ_PWM_SET_FREQ, data[0], data[1], data[2], data[3]];
+        self.port.write_all(&data)
+            .map_err(B15FCommandError::IoError)?;
+        self.port.flush()
+            .map_err(B15FCommandError::IoError)?;
 
+        let mut response = [0u8];
+        self.port.read_exact(&mut response)
+            .map_err(B15FCommandError::IoError)?;
 
+        let response = response[0];
+        Ok(response)
+    }
+
+    pub fn set_pwm_vale(&mut self, value: u8) -> Result<(), B15FCommandError> {
+        let data = [RQ_PWM_SET_VALUE, value];
+        self.port.write_all(&data)
+            .map_err(B15FCommandError::IoError)?;
+        self.port.flush()
+            .map_err(B15FCommandError::IoError)?;
+        let mut response = [0u8];
+        self.port.read_exact(&mut response)
+            .map_err(B15FCommandError::IoError)?;
+        let response = response[0];
+        if response == MSG_OK {
+            Ok(())
+        } else {
+            Err(B15FCommandError::B15FError)
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test1() {
+        let mut b15f = B15F::open_port("/dev/ttyUSB1")
+            .expect("Failed to open port");
+        b15f.set_pwm_frequency(3000.0)
+            .expect("Failed to set pwm frequency");
+        b15f.set_pwm_vale(128)
+            .expect("Failed to set pwm value");
+    }
 }
