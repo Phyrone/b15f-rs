@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use rand::{random, Rng};
+use rand::random;
 use serialport::TTYPort;
 use thiserror::Error;
 
@@ -340,20 +340,5 @@ where
         } else {
             Err(B15FCommandError::B15FError)
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test1() {
-        let mut b15f = B15F::open_port("/dev/ttyUSB1")
-            .expect("Failed to open port");
-        b15f.set_pwm_frequency(3000.0)
-            .expect("Failed to set pwm frequency");
-        b15f.set_pwm_vale(128)
-            .expect("Failed to set pwm value");
     }
 }
