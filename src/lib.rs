@@ -204,7 +204,6 @@ where
         let request = match port {
             DigitalReadPort::Port0 => RQ_DIGITAL_READ_0,
             DigitalReadPort::Port1 => RQ_DIGITAL_READ_1,
-            _ => panic!("digital read port must be 0 or 1")
         };
         let data = [request];
         self.port.write_all(&data)
