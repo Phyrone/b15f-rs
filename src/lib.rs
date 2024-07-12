@@ -39,18 +39,18 @@ const RQ_SERVO_DISABLE: u8 = 22;
 const RQ_SERVO_SET_POS: u8 = 23;
 
 #[derive(Debug, Copy, Clone)]
-enum AnalogWritePort {
+pub enum AnalogWritePort {
     Port0,
     Port1,
 }
 #[derive(Debug, Copy, Clone)]
-enum DigitalWritePort {
+pub enum DigitalWritePort {
     Port0,
     Port1,
 }
 
 #[derive(Debug, Copy, Clone)]
-enum DigitalReadPort {
+pub enum DigitalReadPort {
     Port0,
     Port1,
 }
@@ -93,6 +93,25 @@ impl B15F<TTYPort> {
             .open_native()
             .map_err(B15FInitError::SerialPortError)?;
         B15F::from(port)
+    }
+
+    ///Automatically detects the B15F board and returns an instance of B15F.
+    pub fn instance() -> Option<B15F<TTYPort>> {
+        let ports = serialport::available_ports().ok()?;
+        for port in ports {
+            let  board = B15F::open_port(&port.port_name)
+                .ok()
+                .and_then(|mut board| {
+                    board.test().ok()?;
+                    Some(board)
+                });
+            if let Some(board) = board {
+                return Some(board);
+            }
+
+        }
+        None
+
     }
 }
 
