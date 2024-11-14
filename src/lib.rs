@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+#[cfg(feature = "log")]
+use log::debug;
 use rand::random;
 use serialport::TTYPort;
 use thiserror::Error;
