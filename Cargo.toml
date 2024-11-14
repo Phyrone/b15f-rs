@@ -2,6 +2,14 @@
 name = "b15f"
 version = "0.1.0"
 edition = "2021"
+description = "A Rust port of the B15F client"
+license = "MIT"
+authors = [
+    "Phyrone <phyrone@phyrone.de>",
+]
+readme = "README.md"
+repository = "https://github.com/Phyrone/b15f-rs"
+
 
 [dependencies]
 serialport = "4.3.0"
