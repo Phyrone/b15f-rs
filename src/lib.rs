@@ -10,35 +10,35 @@ use thiserror::Error;
 const BAUD: u32 = 57600;
 
 const MSG_OK: u8 = 0xFF;
-const MSG_ERROR: u8 = 0xFE;
-const MAX_DATA_SIZE: u8 = 64;
+//const MSG_ERROR: u8 = 0xFE;
+//const MAX_DATA_SIZE: u8 = 64;
 
 //Requests
-const RQ_DISCARD: u8 = 0;
+//const RQ_DISCARD: u8 = 0;
 const RQ_TEST: u8 = 1;
-const RQ_INFO: u8 = 2;
-const RQ_INT_TEST: u8 = 3;
-const RQ_SELF_TEST: u8 = 4;
+//const RQ_INFO: u8 = 2;
+//const RQ_INT_TEST: u8 = 3;
+//const RQ_SELF_TEST: u8 = 4;
 const RQ_DIGITAL_WRITE_0: u8 = 5;
 const RQ_DIGITAL_WRITE_1: u8 = 6;
 const RQ_DIGITAL_READ_0: u8 = 7;
 const RQ_DIGITAL_READ_1: u8 = 8;
-const RQ_READ_DIP_SWITCH: u8 = 9;
+//const RQ_READ_DIP_SWITCH: u8 = 9;
 const RQ_ANALOG_WRITE_0: u8 = 10;
 const RQ_ANALOG_WRITE_1: u8 = 11;
 const RQ_ANALOG_READ: u8 = 12;
-const RQ_ADC_DAC_STROKE: u8 = 13;
+//const RQ_ADC_DAC_STROKE: u8 = 13;
 const RQ_PWM_SET_FREQ: u8 = 14;
 const RQ_PWM_SET_VALUE: u8 = 15;
 //NO NO NO!!!
-const RQ_SET_MEM_8: u8 = 16;
-const RQ_GET_MEM_8: u8 = 17;
-const RQ_SET_MEM_16: u8 = 18;
-const RQ_GET_MEM_16: u8 = 19;
-const RQ_COUNTER_OFFSET: u8 = 20;
-const RQ_SERVO_ENABLE: u8 = 21;
-const RQ_SERVO_DISABLE: u8 = 22;
-const RQ_SERVO_SET_POS: u8 = 23;
+//const RQ_SET_MEM_8: u8 = 16;
+//const RQ_GET_MEM_8: u8 = 17;
+//const RQ_SET_MEM_16: u8 = 18;
+//const RQ_GET_MEM_16: u8 = 19;
+//const RQ_COUNTER_OFFSET: u8 = 20;
+//const RQ_SERVO_ENABLE: u8 = 21;
+//const RQ_SERVO_DISABLE: u8 = 22;
+//const RQ_SERVO_SET_POS: u8 = 23;
 
 #[derive(Debug, Copy, Clone)]
 pub enum AnalogWritePort {
@@ -100,7 +100,7 @@ impl B15F<TTYPort> {
     ///Automatically detects the B15F board and returns an instance of B15F.
     pub fn instance() -> Option<B15F<TTYPort>> {
         let mut ports = serialport::available_ports().ok()?;
-        ports.sort_unstable_by_key(|port| port_priority(&port));
+        ports.sort_unstable_by_key(port_priority);
         for port in ports {
             #[cfg(feature = "log")]
             debug!("[Discover] Check for B15 board on {}", port.port_name);
@@ -156,7 +156,7 @@ where
         }
         let response = response[1];
 
-        let pass = (response == rand);
+        let pass = response == rand;
         Ok(pass)
     }
 
