@@ -3,7 +3,7 @@ use std::time::Duration;
 #[cfg(feature = "log")]
 use log::debug;
 use rand::random;
-use serialport::TTYPort;
+use serialport::{SerialPortType, TTYPort};
 use thiserror::Error;
 
 //Serial port settings
@@ -99,21 +99,31 @@ impl B15F<TTYPort> {
 
     ///Automatically detects the B15F board and returns an instance of B15F.
     pub fn instance() -> Option<B15F<TTYPort>> {
-        let ports = serialport::available_ports().ok()?;
+        let mut ports = serialport::available_ports().ok()?;
+        ports.sort_unstable_by_key(|port| port_priority(&port));
         for port in ports {
-            let  board = B15F::open_port(&port.port_name)
+            #[cfg(feature = "log")]
+            debug!("[Discover] Check for B15 board on {}", port.port_name);
+            let board = B15F::open_port(&port.port_name)
+                .inspect_err(|err| {
+                    #[cfg(feature = "log")]
+                    debug!("[Discover] Failed to open {}: {}", port.port_name, err);
+                })
                 .ok()
                 .and_then(|mut board| {
-                    board.test().ok()?;
+                    board.test().inspect_err(|err| {
+                        #[cfg(feature = "log")]
+                        debug!("[Discover] Test failed for {}: {}", port.port_name, err);
+                    }).ok()?;
                     Some(board)
                 });
             if let Some(board) = board {
+                #[cfg(feature = "log")]
+                debug!("[Discover] Choose B15 board on {}", port.port_name);
                 return Some(board);
             }
-
         }
         None
-
     }
 }
 
@@ -133,9 +143,8 @@ where
     }
 
 
-    fn test(&mut self) -> Result<bool, B15FCommandError> {
+    pub fn test(&mut self) -> Result<bool, B15FCommandError> {
         let rand = random::<u8>();
-
         let data = [RQ_TEST, rand];
         self.port.write_all(&data)
             .map_err(B15FCommandError::IoError)?;
@@ -362,4 +371,16 @@ where
             Err(B15FCommandError::B15FError)
         }
     }
+}
+
+fn port_priority(port: &serialport::SerialPortInfo) -> u8 {
+    let priority = match port.port_type {
+        SerialPortType::UsbPort(_) => 0,
+        SerialPortType::PciPort => 1,
+        SerialPortType::BluetoothPort => 2,
+        SerialPortType::Unknown => 3,
+    };
+    #[cfg(feature = "log")]
+    debug!("[Discover] Port priority: {} -> {}", port.port_name, priority);
+    priority
 }
