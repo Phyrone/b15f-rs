@@ -41,22 +41,10 @@ const RQ_PWM_SET_VALUE: u8 = 15;
 //const RQ_SERVO_SET_POS: u8 = 23;
 
 #[derive(Debug, Copy, Clone)]
-pub enum AnalogWritePort {
+pub enum Port {
     Port0,
     Port1,
 }
-#[derive(Debug, Copy, Clone)]
-pub enum DigitalWritePort {
-    Port0,
-    Port1,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum DigitalReadPort {
-    Port0,
-    Port1,
-}
-
 
 #[derive(Debug, Error)]
 pub enum B15FCommandError {
@@ -66,7 +54,6 @@ pub enum B15FCommandError {
     SerialPortError(#[from] serialport::Error),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-
 }
 
 #[derive(Debug, Error)]
@@ -111,10 +98,13 @@ impl B15F<TTYPort> {
                 })
                 .ok()
                 .and_then(|mut board| {
-                    board.test().inspect_err(|err| {
-                        #[cfg(feature = "log")]
-                        debug!("[Discover] Test failed for {}: {}", port.port_name, err);
-                    }).ok()?;
+                    board
+                        .test()
+                        .inspect_err(|err| {
+                            #[cfg(feature = "log")]
+                            debug!("[Discover] Test failed for {}: {}", port.port_name, err);
+                        })
+                        .ok()?;
                     Some(board)
                 });
             if let Some(board) = board {
@@ -132,9 +122,7 @@ where
     P: serialport::SerialPort,
 {
     pub fn from(port: P) -> Result<B15F<P>, B15FInitError> {
-        let mut board = B15F {
-            port
-        };
+        let mut board = B15F { port };
         let pass = board.test()?;
         if !pass {
             return Err(B15FInitError::DeviceNotSupported);
@@ -142,14 +130,15 @@ where
         Ok(board)
     }
 
-
     pub fn test(&mut self) -> Result<bool, B15FCommandError> {
         let rand = random::<u8>();
         let data = [RQ_TEST, rand];
-        self.port.write_all(&data)
+        self.port
+            .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
         let mut response = [0u8; 2];
-        self.port.read_exact(&mut response)
+        self.port
+            .read_exact(&mut response)
             .map_err(B15FCommandError::IoError)?;
         if response[0] != MSG_OK {
             return Err(B15FCommandError::B15FError);
@@ -185,19 +174,20 @@ where
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
     /// * If the response from the port is not MSG_OK, the function will return a B15FCommandError::B15FError.
-    pub fn digital_write(&mut self, port: DigitalWritePort, value: u8) -> Result<(), B15FCommandError> {
+    pub fn digital_write(&mut self, port: Port, value: u8) -> Result<(), B15FCommandError> {
         let request = match port {
-            DigitalWritePort::Port0 => RQ_DIGITAL_WRITE_0,
-            DigitalWritePort::Port1 => RQ_DIGITAL_WRITE_1,
+            Port::Port0 => RQ_DIGITAL_WRITE_0,
+            Port::Port1 => RQ_DIGITAL_WRITE_1,
         };
         let data = [request, value];
-        self.port.write_all(&data)
+        self.port
+            .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
-        self.port.flush()
-            .map_err(B15FCommandError::IoError)?;
+        self.port.flush().map_err(B15FCommandError::IoError)?;
 
         let mut response = [0u8];
-        self.port.read_exact(&mut response)
+        self.port
+            .read_exact(&mut response)
             .map_err(B15FCommandError::IoError)?;
         let response = response[0];
         if response == MSG_OK {
@@ -230,18 +220,19 @@ where
     /// # Errors
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
-    pub fn digital_read(&mut self, port: DigitalReadPort) -> Result<u8, B15FCommandError> {
+    pub fn digital_read(&mut self, port: Port) -> Result<u8, B15FCommandError> {
         let request = match port {
-            DigitalReadPort::Port0 => RQ_DIGITAL_READ_0,
-            DigitalReadPort::Port1 => RQ_DIGITAL_READ_1,
+            Port::Port0 => RQ_DIGITAL_READ_0,
+            Port::Port1 => RQ_DIGITAL_READ_1,
         };
         let data = [request];
-        self.port.write_all(&data)
+        self.port
+            .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
-        self.port.flush()
-            .map_err(B15FCommandError::IoError)?;
+        self.port.flush().map_err(B15FCommandError::IoError)?;
         let mut response = [0u8];
-        self.port.read_exact(&mut response)
+        self.port
+            .read_exact(&mut response)
             .map_err(B15FCommandError::IoError)?;
         let response = response[0].reverse_bits();
         Ok(response)
@@ -274,22 +265,23 @@ where
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
     /// * If the response from the port is not MSG_OK, the function will return a B15FCommandError::B15FError.
-    pub fn analog_write(&mut self, port: AnalogWritePort, value: u16) -> Result<(), B15FCommandError> {
+    pub fn analog_write(&mut self, port: Port, value: u16) -> Result<(), B15FCommandError> {
         let request = match port {
-            AnalogWritePort::Port0 => RQ_ANALOG_WRITE_0,
-            AnalogWritePort::Port1 => RQ_ANALOG_WRITE_1,
+            Port::Port0 => RQ_ANALOG_WRITE_0,
+            Port::Port1 => RQ_ANALOG_WRITE_1,
         };
         if value > 1023 {
             panic!("analog write value must be between 0 and 1023")
         }
         let data = [request, (value & 0xFF) as u8, (value >> 8) as u8];
-        self.port.write_all(&data)
+        self.port
+            .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
-        self.port.flush()
-            .map_err(B15FCommandError::IoError)?;
+        self.port.flush().map_err(B15FCommandError::IoError)?;
 
         let mut response = [0u8];
-        self.port.read_exact(&mut response)
+        self.port
+            .read_exact(&mut response)
             .map_err(B15FCommandError::IoError)?;
         let response = response[0];
         if response == MSG_OK {
@@ -328,12 +320,13 @@ where
             panic!("analog read port must be between 0 and 7")
         }
         let data = [request, port];
-        self.port.write_all(&data)
+        self.port
+            .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
-        self.port.flush()
-            .map_err(B15FCommandError::IoError)?;
+        self.port.flush().map_err(B15FCommandError::IoError)?;
         let mut response = [0u8; 2];
-        self.port.read_exact(&mut response)
+        self.port
+            .read_exact(&mut response)
             .map_err(B15FCommandError::IoError)?;
         let response = u16::from_le_bytes(response);
         Ok(response)
@@ -342,13 +335,14 @@ where
     pub fn set_pwm_frequency(&mut self, frequency: f32) -> Result<u8, B15FCommandError> {
         let data = frequency.to_le_bytes();
         let data = [RQ_PWM_SET_FREQ, data[0], data[1], data[2], data[3]];
-        self.port.write_all(&data)
+        self.port
+            .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
-        self.port.flush()
-            .map_err(B15FCommandError::IoError)?;
+        self.port.flush().map_err(B15FCommandError::IoError)?;
 
         let mut response = [0u8];
-        self.port.read_exact(&mut response)
+        self.port
+            .read_exact(&mut response)
             .map_err(B15FCommandError::IoError)?;
 
         let response = response[0];
@@ -357,12 +351,13 @@ where
 
     pub fn set_pwm_vale(&mut self, value: u8) -> Result<(), B15FCommandError> {
         let data = [RQ_PWM_SET_VALUE, value];
-        self.port.write_all(&data)
+        self.port
+            .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
-        self.port.flush()
-            .map_err(B15FCommandError::IoError)?;
+        self.port.flush().map_err(B15FCommandError::IoError)?;
         let mut response = [0u8];
-        self.port.read_exact(&mut response)
+        self.port
+            .read_exact(&mut response)
             .map_err(B15FCommandError::IoError)?;
         let response = response[0];
         if response == MSG_OK {
@@ -381,6 +376,9 @@ fn port_priority(port: &serialport::SerialPortInfo) -> u8 {
         SerialPortType::Unknown => 3,
     };
     #[cfg(feature = "log")]
-    debug!("[Discover] Port priority: {} -> {}", port.port_name, priority);
+    debug!(
+        "[Discover] Port priority: {} -> {}",
+        port.port_name, priority
+    );
     priority
 }
