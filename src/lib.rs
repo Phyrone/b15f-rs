@@ -1,9 +1,12 @@
-use std::time::Duration;
-
+#[cfg(feature = "experimental")]
+use bitflags::bitflags;
+use bitflags::Flags;
 #[cfg(feature = "log")]
 use log::debug;
 use rand::random;
 use serialport::{SerialPortType, TTYPort};
+use std::io::Cursor;
+use std::time::Duration;
 use thiserror::Error;
 
 //Serial port settings
@@ -44,6 +47,43 @@ const RQ_PWM_SET_VALUE: u8 = 15;
 pub enum Port {
     Port0,
     Port1,
+}
+
+#[cfg(feature = "experimental")]
+bitflags! {
+    pub struct ReadManyPorts: u16 {
+        //Digital read 1-2
+        const Digital0 = 0b0000_0001 << 8;
+        const Digital1 = 0b0000_0010 << 8;
+
+        //Analog read 1-8
+        const ANALOG0 = 0b0000_0100;
+        const ANALOG1 = 0b0000_1000;
+        const ANALOG2 = 0b0001_0000;
+        const ANALOG3 = 0b0010_0000;
+        const ANALOG4 = 0b0100_0000;
+        const ANALOG5 = 0b1000_0000;
+        const ANALOG6 = 0b0000_0001;
+        const ANALOG7 = 0b0000_0010;
+    }
+}
+
+#[cfg(feature = "experimental")]
+impl ReadManyPorts {
+    pub fn from_analog(port: u8) -> Self {
+        match port {
+            0 => ReadManyPorts::ANALOG0,
+            1 => ReadManyPorts::ANALOG1,
+            2 => ReadManyPorts::ANALOG2,
+            3 => ReadManyPorts::ANALOG3,
+            4 => ReadManyPorts::ANALOG4,
+            5 => ReadManyPorts::ANALOG5,
+            6 => ReadManyPorts::ANALOG6,
+            7 => ReadManyPorts::ANALOG7,
+            _ => panic!("invalid analog port"),
+        }
+    }
+    
 }
 
 #[derive(Debug, Error)]
@@ -221,6 +261,11 @@ where
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
     pub fn digital_read(&mut self, port: Port) -> Result<u8, B15FCommandError> {
+        self.send_digital_read_request(port)?;
+        self.read_digital_response()
+    }
+
+    fn send_digital_read_request(&mut self, port: Port) -> Result<(), B15FCommandError> {
         let request = match port {
             Port::Port0 => RQ_DIGITAL_READ_0,
             Port::Port1 => RQ_DIGITAL_READ_1,
@@ -230,6 +275,10 @@ where
             .write_all(&data)
             .map_err(B15FCommandError::IoError)?;
         self.port.flush().map_err(B15FCommandError::IoError)?;
+        Ok(())
+    }
+
+    fn read_digital_response(&mut self) -> Result<u8, B15FCommandError> {
         let mut response = [0u8];
         self.port
             .read_exact(&mut response)
@@ -291,6 +340,47 @@ where
         }
     }
 
+    /// This is an experimental function sending multiple read requests to the board before reading the response.
+    /// It slightly reduces the latency compared to sending a single request per port.
+    /// Depending on the b15 implementation, it may not work as expected (my b32 experimental board works fine).
+    #[cfg(feature = "experimental")]
+    pub fn experiment_read_many(
+        &mut self,
+        ports: ReadManyPorts,
+    ) -> Result<([u8; 2], [u16; 7]), B15FCommandError> {
+        
+        if ports.contains(ReadManyPorts::Digital0) {
+            self.send_digital_read_request(Port::Port0)?;
+        }
+        if ports.contains(ReadManyPorts::Digital1) {
+            self.send_digital_read_request(Port::Port1)?;
+        }
+        for port in 0..8_u8 {
+            let many_port = ReadManyPorts::from_analog(port);
+            if ports.contains(many_port) {
+                self.send_analog_read_request(port)?;
+            }
+        }
+        self.port.flush()?;
+
+        let mut digital = [0; 2];
+        let mut analog = [0; 7];
+        
+        if ports.contains(ReadManyPorts::Digital0) {
+            digital[0] = self.read_digital_response()?;
+        }
+        if ports.contains(ReadManyPorts::Digital1) {
+            digital[1] = self.read_digital_response()?;
+        }
+        for port in 0..8_u8 {
+            if ports.contains(ReadManyPorts::from_analog(port)) {
+                analog[port as usize] = self.read_analog_response()?;
+            }
+        }
+
+        Ok((digital, analog))
+    }
+
     /// Reads the analog value from a specified port.
     ///
     /// This function sends a request to the specified analog port to read its current value.
@@ -315,15 +405,20 @@ where
     ///
     /// * If there is an IO error when writing to or reading from the port, the function will return a B15FCommandError::IoError.
     pub fn analog_read(&mut self, port: u8) -> Result<u16, B15FCommandError> {
-        let request = RQ_ANALOG_READ;
-        if port > 7 {
-            panic!("analog read port must be between 0 and 7")
-        }
-        let data = [request, port];
+        self.send_analog_read_request(port)?;
+        self.read_analog_response()
+    }
+
+    fn send_analog_read_request(&mut self, port: u8) -> Result<(), B15FCommandError> {
+        assert!(port <= 7, "analog read port must be between 0 and 7");
         self.port
-            .write_all(&data)
+            .write_all(&[RQ_ANALOG_READ, port])
             .map_err(B15FCommandError::IoError)?;
         self.port.flush().map_err(B15FCommandError::IoError)?;
+        Ok(())
+    }
+
+    fn read_analog_response(&mut self) -> Result<u16, B15FCommandError> {
         let mut response = [0u8; 2];
         self.port
             .read_exact(&mut response)
