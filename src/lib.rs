@@ -125,7 +125,7 @@ where
 impl B15F<NativePort> {
     pub fn open_port(port_name: &str) -> Result<B15F<NativePort>, B15FInitError> {
         let port = serialport::new(port_name, BAUD)
-            .timeout(Duration::from_millis(2000))
+            .timeout(Duration::from_millis(5000))
             .open_native()
             .map_err(B15FInitError::SerialPortError)?;
         B15F::from(port)
