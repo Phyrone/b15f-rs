@@ -1,13 +1,20 @@
 #[cfg(feature = "experimental")]
 use bitflags::bitflags;
-use bitflags::Flags;
 #[cfg(feature = "log")]
 use log::debug;
 use rand::random;
-use serialport::{SerialPortType, TTYPort};
-use std::io::Cursor;
+use serialport::{SerialPortType};
+#[cfg(windows)]
+use serialport::{COMPort};
+#[cfg(not(windows))]
+use serialport::TTYPort;
 use std::time::Duration;
 use thiserror::Error;
+
+#[cfg(windows)]
+type NativePort = COMPort;
+#[cfg(not(windows))]
+type NativePort = TTYPort;
 
 //Serial port settings
 const BAUD: u32 = 57600;
@@ -115,8 +122,8 @@ where
     port: P,
 }
 
-impl B15F<TTYPort> {
-    pub fn open_port(port_name: &str) -> Result<B15F<TTYPort>, B15FInitError> {
+impl B15F<NativePort> {
+    pub fn open_port(port_name: &str) -> Result<B15F<NativePort>, B15FInitError> {
         let port = serialport::new(port_name, BAUD)
             .timeout(Duration::from_millis(2000))
             .open_native()
@@ -125,7 +132,7 @@ impl B15F<TTYPort> {
     }
 
     ///Automatically detects the B15F board and returns an instance of B15F.
-    pub fn instance() -> Option<B15F<TTYPort>> {
+    pub fn instance() -> Option<B15F<NativePort>> {
         let mut ports = serialport::available_ports().ok()?;
         ports.sort_unstable_by_key(port_priority);
         for port in ports {
