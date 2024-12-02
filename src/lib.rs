@@ -12,9 +12,9 @@ use std::time::Duration;
 use thiserror::Error;
 
 #[cfg(windows)]
-type NativePort = COMPort;
+pub type NativePort = COMPort;
 #[cfg(not(windows))]
-type NativePort = TTYPort;
+pub type NativePort = TTYPort;
 
 //Serial port settings
 const BAUD: u32 = 57600;
